@@ -39,6 +39,7 @@ val KafkaConnectHttp4sVersion = "0.5.0"
 val MunitVersion = "0.7.11"
 val ShapelessVersion = "2.3.3"
 val VulcanVersion = "1.1.0"
+val ConfluentVersion = "5.4.0"
 
 scalacOptions ++= Seq(
   "-deprecation",
@@ -165,6 +166,7 @@ lazy val vulcan = (project in file("vulcan"))
     name := "kafka-streams4s-vulcan",
     libraryDependencies ++= Seq(
       "org.apache.kafka" % "kafka-streams" % KafkaVersion,
+      "io.confluent" % "kafka-avro-serializer" % ConfluentVersion,
       "com.github.fd4s" %% "vulcan" % VulcanVersion
     )
   )
