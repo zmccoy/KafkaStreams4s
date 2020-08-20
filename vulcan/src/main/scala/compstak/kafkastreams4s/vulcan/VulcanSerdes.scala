@@ -2,14 +2,15 @@ package compstak.kafkastreams4s.vulcan
 
 import java.nio.ByteBuffer
 
-import cats.effect.Sync
+import cats.effect.{ConcurrentEffect, Effect, Sync}
+import cats.implicits._
 import io.confluent.kafka.serializers.KafkaAvroSerializer
 import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer}
 import org.apache.kafka.common.utils.Bytes
 import org.apache.kafka.streams.kstream.{Consumed, Grouped, Materialized, Produced}
 import org.apache.kafka.streams.state.KeyValueStore
 import vulcan.{Codec => VCodec}
-import cats.implicits._
+import org.apache.kafka.common.serialization
 
 object VulcanSerdes {
   def serdeForVulcan[A: VCodec]: Serde[A] = new VulcanSerdeCreation[A]
@@ -49,12 +50,63 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializer
 import scala.jdk.CollectionConverters._
 
 object T {
-  //TODO and needs:
-  /*
-  AvroSerializer & AvroDeserializer => Serde
-  Make sure we use the `Key` boolean when we're serializing / deserializing keys
 
-   */
+  //Example use
+  import cats.effect.implicits._
+  class VulcanSchemaSerdeCreation[F[_]: Effect, K, V](implicit K: KeySerDe[F, K], V: ValueSerDe[F, V]) {
+    def createKeySerDe: Serde[K] =
+      new Serde[K] {
+        override def serializer(): serialization.Serializer[K] =
+          new serialization.Serializer[K] {
+            override def serialize(topic: String, data: K): Array[Byte] =
+              K.serializer.flatMap(s => s.serialize(topic, data)).toIO.unsafeRunSync
+          }
+
+        override def deserializer(): serialization.Deserializer[K] =
+          new serialization.Deserializer[K] {
+            override def deserialize(topic: String, data: Array[Byte]): K =
+              K.deserializer.flatMap(d => d.deserialize(topic, data)).toIO.unsafeRunSync
+          }
+      }
+
+    def createValueSerDe: Serde[V] =
+      new Serde[V] {
+        override def serializer(): serialization.Serializer[V] =
+          new serialization.Serializer[V] {
+            override def serialize(topic: String, data: V): Array[Byte] =
+              V.serializer.flatMap(s => s.serialize(topic, data)).toIO.unsafeRunSync
+          }
+
+        override def deserializer(): serialization.Deserializer[V] =
+          new serialization.Deserializer[V] {
+            override def deserialize(topic: String, data: Array[Byte]): V =
+              V.deserializer.flatMap(d => d.deserialize(topic, data)).toIO.unsafeRunSync
+          }
+      }
+  }
+
+  //Should we use the typeclass pattern here? YES
+  case class AvroSerDes[F[_], Key, Value](key: KeySerDe[F, Key], value: ValueSerDe[F, Value])
+  case class KeySerDe[F[_], Key](serializer: F[Serializer[F, Key]], deserializer: F[Deserializer[F, Key]])
+  case class ValueSerDe[F[_], Value](serializer: F[Serializer[F, Value]], deserializer: F[Deserializer[F, Value]])
+
+  def createAvroSerDes[F[_]: Sync, Key, Value](
+    schemaRegistryClient: SchemaRegistryClient,
+    properties: Map[String, String]
+  )(implicit codec: VCodec[Key], codecV: VCodec[Value]): AvroSerDes[F, Key, Value] = {
+    val keyDes: F[Deserializer[F, Key]] = avroDeserializer[Key].using[F](schemaRegistryClient, properties).forKey
+    val keySer: F[Serializer[F, Key]] = avroSerializer[Key].using[F](schemaRegistryClient, properties).forKey
+
+    val valueDes: F[Deserializer[F, Value]] =
+      avroDeserializer[Value].using[F](schemaRegistryClient, properties).forValue
+    val valueSer: F[Serializer[F, Value]] = avroSerializer[Value].using[F](schemaRegistryClient, properties).forValue
+
+    AvroSerDes(
+      key = KeySerDe(keySer, keyDes),
+      value = ValueSerDe(valueSer, valueDes)
+    )
+  }
+
   def avroDeserializer[A](implicit codec: VCodec[A]): AvroDeserializer[A] =
     new AvroDeserializer(codec)
 
@@ -131,7 +183,7 @@ object T {
       def _forKey = forKey
       def _forValue = forValue
       new KVDeserializer[F, A] {
-        val forKey = _forKey
+        val forKey = _forKey //Rename F
         val forValue = _forValue
       }
     }
