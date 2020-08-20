@@ -160,12 +160,10 @@ object T {
     def forValue: F[Serializer[F, A]]
   }
   object KVSerializer {
-    def instance[F[_], A](forKey: F[Serializer[F, A]], forValue: F[Serializer[F, A]]): KVSerializer[F, A] = {
-      def _forKey = forKey
-      def _forValue = forValue
+    def instance[F[_], A](forKeyF: F[Serializer[F, A]], forValueF: F[Serializer[F, A]]): KVSerializer[F, A] = {
       new KVSerializer[F, A] {
-        val forKey = _forKey
-        val forValue = _forValue
+        val forKey = forKeyF
+        val forValue = forValueF
       }
     }
   }
@@ -199,8 +197,8 @@ object T {
         }
 
       KVSerializer.instance(
-        forKey = createSerializer(true),
-        forValue = createSerializer(false)
+        forKeyF = createSerializer(true),
+        forValueF = createSerializer(false)
       )
     }
   }
@@ -211,19 +209,17 @@ object T {
   }
 
   object KVDeserializer {
-    def instance[F[_], A](forKey: F[Deserializer[F, A]], forValue: F[Deserializer[F, A]]): KVDeserializer[F, A] = {
-      def _forKey = forKey
-      def _forValue = forValue
+    def instance[F[_], A](forKeyF: F[Deserializer[F, A]], forValueF: F[Deserializer[F, A]]): KVDeserializer[F, A] = {
       new KVDeserializer[F, A] {
-        val forKey = _forKey //Rename F
-        val forValue = _forValue
+        val forKey = forKeyF
+        val forValue = forValueF
       }
     }
 
     def const[F[_], A](value: F[Deserializer[F, A]]): KVDeserializer[F, A] =
       KVDeserializer.instance(
-        forKey = value,
-        forValue = value
+        forKeyF = value,
+        forValueF = value
       )
   }
 
@@ -270,8 +266,8 @@ object T {
             }
 
           KVDeserializer.instance(
-            forKey = createDeserializer(true),
-            forValue = createDeserializer(false)
+            forKeyF = createDeserializer(true),
+            forValueF = createDeserializer(false)
           )
         case Left(error) => KVDeserializer.const(Sync[F].raiseError(error.throwable))
       }
