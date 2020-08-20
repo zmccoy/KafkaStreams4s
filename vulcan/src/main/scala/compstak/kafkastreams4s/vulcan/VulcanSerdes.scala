@@ -53,7 +53,7 @@ object T {
 
   //Example use
   import cats.effect.implicits._
-  class VulcanSchemaSerdeCreation[F[_]: Effect, K, V](implicit K: KeySerDe[F, K], V: ValueSerDe[F, V]) {
+  class VulcanSchemaSerdeCreation[F[_]: Effect, K, V](implicit K: KeySerDe[F, K], V: ValueSerDes[F, V]) {
     def createKeySerDe: Serde[K] =
       new Serde[K] {
         override def serializer(): serialization.Serializer[K] =
@@ -85,10 +85,42 @@ object T {
       }
   }
 
-  //Should we use the typeclass pattern here? YES
-  case class AvroSerDes[F[_], Key, Value](key: KeySerDe[F, Key], value: ValueSerDe[F, Value])
-  case class KeySerDe[F[_], Key](serializer: F[Serializer[F, Key]], deserializer: F[Deserializer[F, Key]])
-  case class ValueSerDe[F[_], Value](serializer: F[Serializer[F, Value]], deserializer: F[Deserializer[F, Value]])
+  trait AvroSerDes[F[_], Key, Value] {
+    def key: KeySerDe[F, Key]
+    def value: ValueSerDes[F, Value]
+  }
+
+  object AvroSerDes {
+    def apply[F[_], K, V](keyF: KeySerDe[F, K], valueF: ValueSerDes[F, V]): AvroSerDes[F, K, V] = new AvroSerDes[F, K, V] {
+      val key = keyF
+      val value = valueF
+    }
+  }
+
+  trait KeySerDe[F[_], Key] {
+    def serializer: F[Serializer[F, Key]]
+    def deserializer: F[Deserializer[F, Key]]
+  }
+
+  object KeySerDes {
+    def apply[F[_], K](serializerF: F[Serializer[F, K]], deserializerF: F[Deserializer[F, K]]): KeySerDe[F, K] = new KeySerDe[F, K] {
+      val serializer = serializerF
+      val deserializer = deserializerF
+    }
+  }
+
+  trait ValueSerDes[F[_], Value] {
+    def serializer: F[Serializer[F, Value]]
+    def deserializer: F[Deserializer[F, Value]]
+  }
+
+  object ValueSerDes {
+    def apply[F[_], V](serializerF: F[Serializer[F, V]], deserializerF: F[Deserializer[F, V]]): ValueSerDes[F, V] = new ValueSerDes[F, V] {
+      val serializer = serializerF
+      val deserializer = deserializerF
+    }
+  }
+
 
   def createAvroSerDes[F[_]: Sync, Key, Value](
     schemaRegistryClient: SchemaRegistryClient,
@@ -102,8 +134,8 @@ object T {
     val valueSer: F[Serializer[F, Value]] = avroSerializer[Value].using[F](schemaRegistryClient, properties).forValue
 
     AvroSerDes(
-      key = KeySerDe(keySer, keyDes),
-      value = ValueSerDe(valueSer, valueDes)
+      keyF = KeySerDes(keySer, keyDes),
+      valueF = ValueSerDes(valueSer, valueDes)
     )
   }
 
