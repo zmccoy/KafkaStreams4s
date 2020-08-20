@@ -2,7 +2,7 @@ package compstak.kafkastreams4s.vulcan
 
 import java.nio.ByteBuffer
 
-import cats.effect.{ConcurrentEffect, Effect, Sync}
+import cats.effect.{Effect, Sync}
 import cats.implicits._
 import io.confluent.kafka.serializers.KafkaAvroSerializer
 import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer}
@@ -51,59 +51,115 @@ import scala.jdk.CollectionConverters._
 
 object T {
 
-  //Example use
-  import cats.effect.implicits._
-  class VulcanSchemaSerdeCreation[F[_]: Effect, K, V](implicit K: KeySerDe[F, K], V: ValueSerDes[F, V]) {
-    def createKeySerDe: Serde[K] =
-      new Serde[K] {
-        override def serializer(): serialization.Serializer[K] =
-          new serialization.Serializer[K] {
-            override def serialize(topic: String, data: K): Array[Byte] =
-              K.serializer.flatMap(s => s.serialize(topic, data)).toIO.unsafeRunSync
-          }
+  object Pack {
 
-        override def deserializer(): serialization.Deserializer[K] =
-          new serialization.Deserializer[K] {
-            override def deserialize(topic: String, data: Array[Byte]): K =
-              K.deserializer.flatMap(d => d.deserialize(topic, data)).toIO.unsafeRunSync
-          }
+  }
+
+  object CDec {
+
+    trait VulcanSchemaCodec[A] {
+      implicit def vcodec: VCodec[A]
+
+      def serde: Serde[A] = ???
+    }
+
+    object VulcanSchemaCodec {
+      def apply[A: VulcanSchemaCodec]: VulcanSchemaCodec[A] = implicitly
+      import compstak.kafkastreams4s.Codec
+      implicit val vulcanSchemaCodec: Codec[VulcanSchemaCodec] =
+        new Codec[VulcanSchemaCodec] {
+          def serde[A: VulcanSchemaCodec]: Serde[A] = apply[A].serde
+          def optionSerde[A: VulcanSchemaCodec]: VulcanSchemaCodec[Option[A]] =
+            new VulcanSchemaCodec[Option[A]] {
+              implicit def vcodec: VCodec[Option[A]] = VCodec.option(apply[A].vcodec)
+            }
+        }
+
+      implicit def vulcanCodecFromVCodec[A](implicit V: VCodec[A]): VulcanSchemaCodec[A] =
+        new VulcanSchemaCodec[A] {
+          implicit def vcodec: VCodec[A] = V
+        }
+    }
+  }
+
+  object VulcanSchemaSerdes {
+    def serdeForSchema[F[_] : Effect, K, V](implicit K: KeySerDes[F, K], V: ValueSerDes[F, V]): (Serde[K], Serde[V]) = {
+      val v = new VulcanSchemaSerdeCreation[F, K, V]
+      (v.createKeySerDe, v.createValueSerDe)
+    }
+      def producedForVulcan[F[_]: Effect, K, V](implicit K: KeySerDes[F, K], V: ValueSerDes[F, V]): Produced[K, V] = {
+        val x = serdeForSchema[F,K,V]
+        Produced.`with`(x._1, x._2)
       }
 
-    def createValueSerDe: Serde[V] =
-      new Serde[V] {
-        override def serializer(): serialization.Serializer[V] =
-          new serialization.Serializer[V] {
-            override def serialize(topic: String, data: V): Array[Byte] =
-              V.serializer.flatMap(s => s.serialize(topic, data)).toIO.unsafeRunSync
-          }
+    def materializedForVulcan[F[_]: Effect, K, V](implicit K: KeySerDes[F, K], V: ValueSerDes[F, V]): Materialized[K, V, KeyValueStore[Bytes, Array[Byte]]] = {
+      val x = serdeForSchema[F,K,V]
+      Materialized.`with`(x._1, x._2)
+    }
 
-        override def deserializer(): serialization.Deserializer[V] =
-          new serialization.Deserializer[V] {
-            override def deserialize(topic: String, data: Array[Byte]): V =
-              V.deserializer.flatMap(d => d.deserialize(topic, data)).toIO.unsafeRunSync
-          }
-      }
+    def consumedForVulcan[F[_]: Effect, K, V](implicit K: KeySerDes[F, K], V: ValueSerDes[F, V]): Consumed[K, V] = {
+      val x = serdeForSchema[F,K,V]
+      Consumed.`with`(x._1, x._2)
+    }
+
+    def groupedForVulcan[F[_]: Effect, K, V](implicit K: KeySerDes[F, K], V: ValueSerDes[F, V]): Grouped[K, V] = {
+      val x = serdeForSchema[F,K,V]
+      Grouped.`with`(x._1, x._2)
+    }
+
+    import cats.effect.implicits._
+    class VulcanSchemaSerdeCreation[F[_]: Effect, K, V](implicit K: KeySerDes[F, K], V: ValueSerDes[F, V]) {
+      def createKeySerDe: Serde[K] =
+        new Serde[K] {
+          override def serializer(): serialization.Serializer[K] =
+            new serialization.Serializer[K] {
+              override def serialize(topic: String, data: K): Array[Byte] =
+                K.serializer.flatMap(s => s.serialize(topic, data)).toIO.unsafeRunSync
+            }
+
+          override def deserializer(): serialization.Deserializer[K] =
+            new serialization.Deserializer[K] {
+              override def deserialize(topic: String, data: Array[Byte]): K =
+                K.deserializer.flatMap(d => d.deserialize(topic, data)).toIO.unsafeRunSync
+            }
+        }
+
+      def createValueSerDe: Serde[V] =
+        new Serde[V] {
+          override def serializer(): serialization.Serializer[V] =
+            new serialization.Serializer[V] {
+              override def serialize(topic: String, data: V): Array[Byte] =
+                V.serializer.flatMap(s => s.serialize(topic, data)).toIO.unsafeRunSync
+            }
+
+          override def deserializer(): serialization.Deserializer[V] =
+            new serialization.Deserializer[V] {
+              override def deserialize(topic: String, data: Array[Byte]): V =
+                V.deserializer.flatMap(d => d.deserialize(topic, data)).toIO.unsafeRunSync
+            }
+        }
+    }
   }
 
   trait AvroSerDes[F[_], Key, Value] {
-    def key: KeySerDe[F, Key]
+    def key: KeySerDes[F, Key]
     def value: ValueSerDes[F, Value]
   }
 
   object AvroSerDes {
-    def apply[F[_], K, V](keyF: KeySerDe[F, K], valueF: ValueSerDes[F, V]): AvroSerDes[F, K, V] = new AvroSerDes[F, K, V] {
+    def apply[F[_], K, V](keyF: KeySerDes[F, K], valueF: ValueSerDes[F, V]): AvroSerDes[F, K, V] = new AvroSerDes[F, K, V] {
       val key = keyF
       val value = valueF
     }
   }
 
-  trait KeySerDe[F[_], Key] {
+  trait KeySerDes[F[_], Key] {
     def serializer: F[Serializer[F, Key]]
     def deserializer: F[Deserializer[F, Key]]
   }
 
   object KeySerDes {
-    def apply[F[_], K](serializerF: F[Serializer[F, K]], deserializerF: F[Deserializer[F, K]]): KeySerDe[F, K] = new KeySerDe[F, K] {
+    def apply[F[_], K](serializerF: F[Serializer[F, K]], deserializerF: F[Deserializer[F, K]]): KeySerDes[F, K] = new KeySerDes[F, K] {
       val serializer = serializerF
       val deserializer = deserializerF
     }
@@ -258,9 +314,11 @@ object T {
               Deserializer.instance { (topic, bytes) =>
                 val writerSchemaId = ByteBuffer.wrap(bytes).getInt(1) // skip magic byte
                 val writerSchema = schemaRegistryClient.getById(writerSchemaId)
-                c.decode(kad.deserialize(topic, bytes, schema), writerSchema) match {
-                  case Right(a) => Sync[F].pure(a)
-                  case Left(error) => Sync[F].raiseError(error.throwable)
+                Sync[F].suspend {
+                  c.decode(kad.deserialize(topic, bytes, schema), writerSchema) match {
+                    case Right(a) => Sync[F].pure(a)
+                    case Left(error) => Sync[F].raiseError(error.throwable)
+                  }
                 }
               }
             }
