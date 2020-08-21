@@ -14,15 +14,11 @@ object VulcanSchemaCodec {
 
   import compstak.kafkastreams4s.Codec
 
-  implicit val vulcanSchemaCodec(implicit XYZ): Codec[VulcanSchemaCodec] =
+  implicit def vulcanSchemaCodec[F[_], A]: Codec[VulcanSchemaCodec] =
     new Codec[VulcanSchemaCodec] {
       def serde[A: VulcanSchemaCodec]: Serde[A] = apply[A].serde
 
-      def optionSerde[A: VulcanSchemaCodec]: VulcanSchemaCodec[Option[A]] =
-        new VulcanSchemaCodec[Option[A]] {
-          implicit def vcodec: VCodec[Option[A]] = VCodec.option(apply[A].vcodec)
-          def serde: Serde[Option[A]] = ??? //We'll need to recreate the AvroSerDes here then(?)
-        }
+      def optionSerde[A: VulcanSchemaCodec]: VulcanSchemaCodec[Option[A]] = ???
     }
 
   implicit def vulcanCodecFromVCodec[F[_]: Effect, A](implicit V: VCodec[A], A: KeySerDes[F, A]): VulcanSchemaCodec[A] =
