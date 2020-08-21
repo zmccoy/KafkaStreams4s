@@ -6,9 +6,9 @@ import vulcan.{Codec => VCodec}
 object SerDesHelper {
 
   def createAvroSerDes[F[_]: Sync, Key, Value](
-                                                schemaRegistryClient: SchemaRegistryClient,
-                                                properties: Map[String, String]
-                                              )(implicit codec: VCodec[Key], codecV: VCodec[Value]): AvroSerDes[F, Key, Value] = {
+    schemaRegistryClient: SchemaRegistryClient,
+    properties: Map[String, String]
+  )(implicit codec: VCodec[Key], codecV: VCodec[Value]): AvroSerDes[F, Key, Value] = {
     val keyDes: F[Deserializer[F, Key]] = avroDeserializer[Key].using[F](schemaRegistryClient, properties).forKey
     val keySer: F[Serializer[F, Key]] = avroSerializer[Key].using[F](schemaRegistryClient, properties).forKey
 

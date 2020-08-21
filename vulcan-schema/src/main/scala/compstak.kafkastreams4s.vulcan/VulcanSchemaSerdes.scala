@@ -11,10 +11,8 @@ import cats.implicits._
 
 object VulcanSchemaSerdes {
 
-  def serdeForSchema[F[_]: Effect, K, V](implicit K: KeySerDes[F, K], V: ValueSerDes[F, V]): (Serde[K], Serde[V]) = {
-    val v = new VulcanSchemaSerdeCreation[F, K, V]
-    (v.createKeySerDe, v.createValueSerDe)
-  }
+  def serdeForSchema[F[_]: Effect, K, V](implicit K: KeySerDes[F, K], V: ValueSerDes[F, V]): (Serde[K], Serde[V]) =
+    (createKeySerDe, createValueSerDe)
 
   def producedForVulcan[F[_]: Effect, K, V](implicit K: KeySerDes[F, K], V: ValueSerDes[F, V]): Produced[K, V] = {
     val x = serdeForSchema[F, K, V]
@@ -38,36 +36,33 @@ object VulcanSchemaSerdes {
     val x = serdeForSchema[F, K, V]
     Grouped.`with`(x._1, x._2)
   }
+  def createKeySerDe[F[_]: Effect, K](implicit K: KeySerDes[F, K]): Serde[K] =
+    new Serde[K] {
+      override def serializer(): serialization.Serializer[K] =
+        new serialization.Serializer[K] {
+          override def serialize(topic: String, data: K): Array[Byte] =
+            K.serializer.flatMap(s => s.serialize(topic, data)).toIO.unsafeRunSync
+        }
 
-  class VulcanSchemaSerdeCreation[F[_]: Effect, K, V](implicit K: KeySerDes[F, K], V: ValueSerDes[F, V]) {
-    def createKeySerDe: Serde[K] =
-      new Serde[K] {
-        override def serializer(): serialization.Serializer[K] =
-          new serialization.Serializer[K] {
-            override def serialize(topic: String, data: K): Array[Byte] =
-              K.serializer.flatMap(s => s.serialize(topic, data)).toIO.unsafeRunSync
-          }
+      override def deserializer(): serialization.Deserializer[K] =
+        new serialization.Deserializer[K] {
+          override def deserialize(topic: String, data: Array[Byte]): K =
+            K.deserializer.flatMap(d => d.deserialize(topic, data)).toIO.unsafeRunSync
+        }
+    }
 
-        override def deserializer(): serialization.Deserializer[K] =
-          new serialization.Deserializer[K] {
-            override def deserialize(topic: String, data: Array[Byte]): K =
-              K.deserializer.flatMap(d => d.deserialize(topic, data)).toIO.unsafeRunSync
-          }
-      }
+  def createValueSerDe[F[_]: Effect, V](implicit V: ValueSerDes[F, V]): Serde[V] =
+    new Serde[V] {
+      override def serializer(): serialization.Serializer[V] =
+        new serialization.Serializer[V] {
+          override def serialize(topic: String, data: V): Array[Byte] =
+            V.serializer.flatMap(s => s.serialize(topic, data)).toIO.unsafeRunSync
+        }
 
-    def createValueSerDe: Serde[V] =
-      new Serde[V] {
-        override def serializer(): serialization.Serializer[V] =
-          new serialization.Serializer[V] {
-            override def serialize(topic: String, data: V): Array[Byte] =
-              V.serializer.flatMap(s => s.serialize(topic, data)).toIO.unsafeRunSync
-          }
-
-        override def deserializer(): serialization.Deserializer[V] =
-          new serialization.Deserializer[V] {
-            override def deserialize(topic: String, data: Array[Byte]): V =
-              V.deserializer.flatMap(d => d.deserialize(topic, data)).toIO.unsafeRunSync
-          }
-      }
-  }
+      override def deserializer(): serialization.Deserializer[V] =
+        new serialization.Deserializer[V] {
+          override def deserialize(topic: String, data: Array[Byte]): V =
+            V.deserializer.flatMap(d => d.deserialize(topic, data)).toIO.unsafeRunSync
+        }
+    }
 }
