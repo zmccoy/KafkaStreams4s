@@ -172,9 +172,22 @@ lazy val vulcan = (project in file("vulcan"))
   )
   .dependsOn(core)
 
+lazy val vulcanSchema = (project in file("vulcan-schema"))
+  .settings(commonSettings)
+  .settings(
+    name := "kafka-streams4s-vulcan-schema",
+    libraryDependencies ++= Seq(
+      "org.apache.kafka" % "kafka-streams" % KafkaVersion,
+      "io.confluent" % "kafka-avro-serializer" % ConfluentVersion,
+      "com.github.fd4s" %% "vulcan" % VulcanVersion
+    )
+  )
+  .dependsOn(core)
+
+
 lazy val kafkaStreams4s = (project in file("."))
   .settings(commonSettings)
   .settings(noPublishSettings)
   .settings(name := "kafka-streams4s")
-  .dependsOn(core, circe, debezium, avro4s, shapeless, vulcan, testing, tests, docs)
-  .aggregate(core, circe, debezium, avro4s, shapeless, vulcan, testing, tests, docs)
+  .dependsOn(core, circe, debezium, avro4s, shapeless, vulcan, vulcanSchema, testing, tests, docs)
+  .aggregate(core, circe, debezium, avro4s, shapeless, vulcan, vulcanSchema, testing, tests, docs)
