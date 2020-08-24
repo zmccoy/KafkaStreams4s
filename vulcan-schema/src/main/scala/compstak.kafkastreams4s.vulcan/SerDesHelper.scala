@@ -17,8 +17,8 @@ object SerDesHelper {
     val valueSer: F[Serializer[F, Value]] = avroSerializer[Value].using[F](schemaRegistryClient, properties).forValue
 
     AvroSerDes(
-      keyF = KeySerDes(keySer, keyDes),
-      valueF = ValueSerDes(valueSer, valueDes)
+      keyF = SerDesFor.forKey(keySer, keyDes),
+      valueF = SerDesFor.forValue(valueSer, valueDes)
     )
   }
 

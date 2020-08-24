@@ -21,15 +21,18 @@ object VulcanSchemaCodec {
       def optionSerde[A: VulcanSchemaCodec]: VulcanSchemaCodec[Option[A]] = ???
     }
 
-  implicit def vulcanCodecFromVCodec[F[_]: Effect, A](implicit V: VCodec[A], A: KeySerDes[F, A]): VulcanSchemaCodec[A] =
+  implicit def vulcanCodecFromVCodec[F[_]: Effect, A](implicit
+    V: VCodec[A],
+    A: SerDesFor[F, A, Key]
+  ): VulcanSchemaCodec[A] =
     new VulcanSchemaCodec[A] {
       implicit def vcodec: VCodec[A] = V
       def serde: Serde[A] = VulcanSchemaSerdes.createKeySerDe[F, A]
     }
 
-  implicit def vulcanCodecFromVCodec[F[_]: Effect, A](implicit
+  implicit def vulcanCodecFromVCodecV[F[_]: Effect, A](implicit
     V: VCodec[A],
-    A: ValueSerDes[F, A]
+    A: SerDesFor[F, A, Value]
   ): VulcanSchemaCodec[A] =
     new VulcanSchemaCodec[A] {
       implicit def vcodec: VCodec[A] = V

@@ -2,9 +2,10 @@ package compstak.kafkastreams4s.vulcan
 
 import cats.effect.Effect
 import compstak.kafkastreams4s.vulcan.schema.{
-  KeySerDes,
+  Key,
+  SerDesFor,
   SerDesHelper,
-  ValueSerDes,
+  Value,
   VulcanSchemaCodec,
   VulcanSchemaSerdes
 }
@@ -30,8 +31,8 @@ class AvroMethodsForT[F[_]: Effect, T: Codec](
       def serde: Serde[T] = VulcanSchemaSerdes.createValueSerDe[F, T](implicitly[Effect[F]], x.value)
     }
 
-  def keySerdes: KeySerDes[F, T] = x.key
-  def valueSerdes: ValueSerDes[F, T] = x.value
+  def keySerdes: SerDesFor[F, T, Key] = x.key
+  def valueSerdes: SerDesFor[F, T, Value] = x.value
 
 }
 
