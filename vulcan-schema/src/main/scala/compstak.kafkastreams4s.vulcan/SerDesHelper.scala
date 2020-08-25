@@ -5,6 +5,10 @@ import vulcan.{Codec => VCodec}
 
 object SerDesHelper {
 
+  //In scope vcodecs
+  //This method createAvroSerdes(s,p) which gives AvroSerDes[F, Key, Value]
+  //def forKey ( ASD[K,V] => SerDe[K]) => Codec[VulcanSchemaCodec[]]
+  //def forValue ( ASDpK,V] => Serde[V] for value
   def createAvroSerDes[F[_]: Sync, Key, Value](
     schemaRegistryClient: SchemaRegistryClient,
     properties: Map[String, String]
