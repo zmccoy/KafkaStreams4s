@@ -17,7 +17,7 @@ class AvroImplicits[F[_]: Effect](
   //Process: VCodec => VulcanSchemaCodec => Codec[VulcanSchemaCodec]
 
   def avroSerdes[K: VCodec,V: VCodec]: AvroSerDes[F,K,V] = SerDesHelper.createAvroSerDes[F, K, V](schemaRegistryClient, properties)
-  //User makes this^^ implicit.  At this point we know the K and V that we want to be using and lose that after going to VulcanSchemaCodec so we need to go directly to Codec[Vulcan]
+  //User makes this^^ implicit.
   def toCodecVulcanSchema[K,V](a: AvroSerDes[F,K,V]): (Codec[VulcanSchemaCodec[K]], Codec[VulcanSchemaCodec[V]]) = {
     //Start here and produce that
 

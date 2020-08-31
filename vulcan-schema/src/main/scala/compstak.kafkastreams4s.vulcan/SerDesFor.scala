@@ -1,12 +1,6 @@
 package compstak.kafkastreams4s.vulcan.schema
 import vulcan.{Codec => VCodec}
 
-trait SerDesFor[F[_], T] {
-  def vcodec: VCodec[T]
-  def serializer: F[Serializer[F, T]]
-  def deserializer: F[Deserializer[F, T]]
-}
-
 trait SerDesForKey[F[_],T] {
   def vcodec: VCodec[T]
   def serializer: F[Serializer[F, T]]
