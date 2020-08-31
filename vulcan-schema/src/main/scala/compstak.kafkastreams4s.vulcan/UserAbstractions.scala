@@ -1,59 +1,71 @@
 package compstak.kafkastreams4s.vulcan
 
-import cats.effect.Effect
+import cats.effect.{Effect, Sync}
 import compstak.kafkastreams4s.Codec
-import compstak.kafkastreams4s.vulcan.schema.{Key, SerDesFor, SerDesHelper, Value, VulcanSchemaCodec, VulcanSchemaSerdes}
+import compstak.kafkastreams4s.vulcan.schema.{AvroSerDes, SerDesHelper, VulcanSchemaCodec, VulcanSchemaSerdes}
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 import org.apache.kafka.common.serialization.Serde
 import vulcan.{Codec => VCodec}
 
-class AvroMethodsForT[F[_]: Effect, T: VCodec](
+
+class AvroImplicits[F[_]: Effect](
   schemaRegistryClient: SchemaRegistryClient,
   properties: Map[String, String]
 ) {
-  private val x = SerDesHelper.createAvroSerDes[F, T, T](schemaRegistryClient, properties)
 
-  //Move type T and implicit VCodec down to these defs.
-  def asCodecKey: Codec[VulcanSchemaCodec] = new Codec[VulcanSchemaCodec] {
-    override def optionSerde[A: VulcanSchemaCodec]: VulcanSchemaCodec[Option[A]] = new VulcanSchemaCodec[Option[A]] {
-      override implicit def vcodec: VCodec[Option[A]] = VCodec.option(implicitly[VulcanSchemaCodec[A]].vcodec)
-      override def serde: Serde[Option[A]] = VulcanSchemaSerdes.createKeySerDe[F, Option[A]](implicitly[Effect[F]], SerDesHelper.createAvroSerDes[F, Option[A], Option[A]](schemaRegistryClient, properties).key)
-    }
-    def serde[A: VulcanSchemaCodec]: Serde[A] = implicitly[VulcanSchemaCodec[A]].serde
+
+  //Process: VCodec => VulcanSchemaCodec => Codec[VulcanSchemaCodec]
+
+  def avroSerdes[K: VCodec,V: VCodec]: AvroSerDes[F,K,V] = SerDesHelper.createAvroSerDes[F, K, V](schemaRegistryClient, properties)
+  //User makes this^^ implicit.  At this point we know the K and V that we want to be using and lose that after going to VulcanSchemaCodec so we need to go directly to Codec[Vulcan]
+  def toCodecVulcanSchema[K,V](a: AvroSerDes[F,K,V]): (Codec[VulcanSchemaCodec[K]], Codec[VulcanSchemaCodec[V]]) = {
+    //Start here and produce that
+
+    ???
   }
 
-  def asCodecValue: Codec[VulcanSchemaCodec] = new Codec[VulcanSchemaCodec] {
-    override def optionSerde[A: VulcanSchemaCodec]: VulcanSchemaCodec[Option[A]] = new VulcanSchemaCodec[Option[A]] {
-      override implicit def vcodec: VCodec[Option[A]] = VCodec.option(implicitly[VulcanSchemaCodec[A]].vcodec)
-      override def serde: Serde[Option[A]] = VulcanSchemaSerdes.createValueSerDe[F, Option[A]](implicitly[Effect[F]], SerDesHelper.createAvroSerDes[F, Option[A], Option[A]](schemaRegistryClient, properties).value)
+  def asCodecKey: Codec[VulcanSchemaCodec] =
+    new Codec[VulcanSchemaCodec] {
+      override def optionSerde[A: VulcanSchemaCodec]: VulcanSchemaCodec[Option[A]] =
+        new VulcanSchemaCodec[Option[A]] {
+          implicit override def vcodec: VCodec[Option[A]] = VCodec.option(implicitly[VulcanSchemaCodec[A]].vcodec)
+          override def serde: Serde[Option[A]] =
+            VulcanSchemaSerdes.createKeySerDe[F, Option[A]](
+              implicitly[Effect[F]],
+              SerDesHelper.createAvroSerDes[F, Option[A], Option[A]](schemaRegistryClient, properties).key
+            )
+        }
+      def serde[A: VulcanSchemaCodec]: Serde[A] =
+        VulcanSchemaSerdes.createKeySerDe[F, A](implicitly[Effect[F]], SerDesHelper.createAvroSerDes[F, A, A](schemaRegistryClient, properties)(implicitly[Sync[F]], implicitly[schema.VulcanSchemaCodec[A]].vcodec,implicitly[schema.VulcanSchemaCodec[A]].vcodec).key)
     }
-    def serde[A: VulcanSchemaCodec]: Serde[A] = implicitly[VulcanSchemaCodec[A]].serde
-  }
 
-  def asKeyCodec: VulcanSchemaCodec[T] =
+  def asCodecValue: Codec[VulcanSchemaCodec] =
+    new Codec[VulcanSchemaCodec] {
+      override def optionSerde[A: VulcanSchemaCodec]: VulcanSchemaCodec[Option[A]] =
+        new VulcanSchemaCodec[Option[A]] {
+          implicit override def vcodec: VCodec[Option[A]] = VCodec.option(implicitly[VulcanSchemaCodec[A]].vcodec)
+          override def serde: Serde[Option[A]] =
+            VulcanSchemaSerdes.createValueSerDe[F, Option[A]](
+              implicitly[Effect[F]],
+              SerDesHelper.createAvroSerDes[F, Option[A], Option[A]](schemaRegistryClient, properties).value
+            )
+        }
+      def serde[A: VulcanSchemaCodec]: Serde[A] =
+        VulcanSchemaSerdes.createValueSerDe[F, A](implicitly[Effect[F]],
+          SerDesHelper.createAvroSerDes[F, A, A](schemaRegistryClient, properties)(implicitly[Sync[F]], implicitly[schema.VulcanSchemaCodec[A]].vcodec,implicitly[schema.VulcanSchemaCodec[A]].vcodec).value)
+    }
+
+  def asKeyCodec[T: VCodec]: VulcanSchemaCodec[T] =
     new VulcanSchemaCodec[T] {
       def vcodec = implicitly[VCodec[T]]
-      def serde: Serde[T] = VulcanSchemaSerdes.createKeySerDe[F, T](implicitly[Effect[F]], x.key)
+      def serde: Serde[T] = VulcanSchemaSerdes.createKeySerDe[F, T](implicitly[Effect[F]], SerDesHelper.createAvroSerDes[F, T, T](schemaRegistryClient, properties).key)
     }
 
-  //Method to produce a Codec[VulcanSchemaCodec[T]] (?)
-  def asValueCodec: VulcanSchemaCodec[T] =
+  def asValueCodec[T: VCodec]: VulcanSchemaCodec[T] =
     new VulcanSchemaCodec[T] {
       def vcodec = implicitly[VCodec[T]]
-      def serde: Serde[T] = VulcanSchemaSerdes.createValueSerDe[F, T](implicitly[Effect[F]], x.value)
+      def serde: Serde[T] = VulcanSchemaSerdes.createValueSerDe[F, T](implicitly[Effect[F]], SerDesHelper.createAvroSerDes[F, T, T](schemaRegistryClient, properties).value)
     }
-
-  def keySerdes: SerDesFor[F, T, Key] = x.key
-  def valueSerdes: SerDesFor[F, T, Value] = x.value
 
 }
 
-//Want something to take in the schemaREg + properties and then hide that away only exposing ways to create
-
-/* val schemaHolder = new AvroMethodsForT[F, MyType](sr, prop)
-val schemaHolderForY = new AvroMethodsForT[F, YourType](sr, prop)
-implicit val myTypeCodec = schemaHolder.asKey //For regular operations that require a Codec
-implicit val yourTypeCodec = schemaHolderForY.asValue
-implicit val keySerde = schemaHolder.keySerdes
-implicit val valueSerde = schemaHolderForY.valueSerdes //Needed for the Stable exposure since it keeps the key and value separate.
- */

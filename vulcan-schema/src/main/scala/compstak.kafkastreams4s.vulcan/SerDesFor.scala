@@ -1,28 +1,42 @@
 package compstak.kafkastreams4s.vulcan.schema
+import vulcan.{Codec => VCodec}
 
-sealed abstract class KV
-trait Key extends KV
-trait Value extends KV
+trait SerDesFor[F[_], T] {
+  def vcodec: VCodec[T]
+  def serializer: F[Serializer[F, T]]
+  def deserializer: F[Deserializer[F, T]]
+}
 
-trait SerDesFor[F[_], T, P <: KV] {
+trait SerDesForKey[F[_],T] {
+  def vcodec: VCodec[T]
+  def serializer: F[Serializer[F, T]]
+  def deserializer: F[Deserializer[F, T]]
+}
+
+trait SerDesForValue[F[_], T] {
+  def vcodec: VCodec[T]
   def serializer: F[Serializer[F, T]]
   def deserializer: F[Deserializer[F, T]]
 }
 
 object SerDesFor {
 
-  def forKey[F[_], T](serializerF: F[Serializer[F, T]], deserializerF: F[Deserializer[F, T]]): SerDesFor[F, T, Key] =
-    new SerDesFor[F, T, Key] {
+  def key[F[_], T](vCodec: VCodec[T], serializerF: F[Serializer[F, T]], deserializerF: F[Deserializer[F, T]]): SerDesForKey[F, T] =
+    new SerDesForKey[F, T] {
+      val vcodec = vCodec
       val serializer = serializerF
       val deserializer = deserializerF
     }
 
-  def forValue[F[_], T](
+  def value[F[_], T](
+    vCodec: VCodec[T],
     serializerF: F[Serializer[F, T]],
     deserializerF: F[Deserializer[F, T]]
-  ): SerDesFor[F, T, Value] =
-    new SerDesFor[F, T, Value] {
+  ): SerDesForValue[F, T] =
+    new SerDesForValue[F, T] {
+      val vcodec = vCodec
       val serializer = serializerF
       val deserializer = deserializerF
     }
+
 }

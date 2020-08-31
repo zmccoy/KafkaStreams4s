@@ -11,44 +11,35 @@ import cats.implicits._
 
 object VulcanSchemaSerdes {
 
-  def serdeForSchema[F[_]: Effect, K, V](implicit
-    K: SerDesFor[F, K, Key],
-    V: SerDesFor[F, V, Value]
-  ): (Serde[K], Serde[V]) =
+  def serdeForSchema[F[_]: Effect, K, V](implicit akv: AvroSerDes[F,K,V]): (Serde[K], Serde[V]) = {
+    implicit val key = akv.key
+    implicit val value = akv.value
     (createKeySerDe, createValueSerDe)
+  }
 
-  def producedForVulcan[F[_]: Effect, K, V](implicit
-    K: SerDesFor[F, K, Key],
-    V: SerDesFor[F, V, Value]
-  ): Produced[K, V] = {
+  def producedForVulcan[F[_]: Effect, K, V](implicit akv: AvroSerDes[F,K,V]): Produced[K, V] = {
     val x = serdeForSchema[F, K, V]
     Produced.`with`(x._1, x._2)
   }
 
-  def materializedForVulcan[F[_]: Effect, K, V](implicit
-    K: SerDesFor[F, K, Key],
-    V: SerDesFor[F, V, Value]
+  def materializedForVulcan[F[_]: Effect, K, V](implicit akv: AvroSerDes[F,K,V]
   ): Materialized[K, V, KeyValueStore[Bytes, Array[Byte]]] = {
     val x = serdeForSchema[F, K, V]
     Materialized.`with`(x._1, x._2)
   }
 
-  def consumedForVulcan[F[_]: Effect, K, V](implicit
-    K: SerDesFor[F, K, Key],
-    V: SerDesFor[F, V, Value]
-  ): Consumed[K, V] = {
+  def consumedForVulcan[F[_]: Effect, K, V](implicit akv: AvroSerDes[F,K,V]
+                                           ): Consumed[K, V] = {
     val x = serdeForSchema[F, K, V]
     Consumed.`with`(x._1, x._2)
   }
 
-  def groupedForVulcan[F[_]: Effect, K, V](implicit
-    K: SerDesFor[F, K, Key],
-    V: SerDesFor[F, V, Value]
+  def groupedForVulcan[F[_]: Effect, K, V](implicit akv: AvroSerDes[F,K,V]
   ): Grouped[K, V] = {
     val x = serdeForSchema[F, K, V]
     Grouped.`with`(x._1, x._2)
   }
-  def createKeySerDe[F[_]: Effect, K](implicit K: SerDesFor[F, K, Key]): Serde[K] =
+  def createKeySerDe[F[_]: Effect, K](implicit K: SerDesForKey[F, K]): Serde[K] =
     new Serde[K] {
       override def serializer(): serialization.Serializer[K] =
         new serialization.Serializer[K] {
@@ -63,7 +54,7 @@ object VulcanSchemaSerdes {
         }
     }
 
-  def createValueSerDe[F[_]: Effect, V](implicit V: SerDesFor[F, V, Value]): Serde[V] =
+  def createValueSerDe[F[_]: Effect, V](implicit V: SerDesForValue[F, V]): Serde[V] =
     new Serde[V] {
       override def serializer(): serialization.Serializer[V] =
         new serialization.Serializer[V] {

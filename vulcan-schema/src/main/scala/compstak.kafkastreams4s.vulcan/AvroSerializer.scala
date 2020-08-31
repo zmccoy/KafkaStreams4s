@@ -18,8 +18,7 @@ class AvroSerializer[A](c: VCodec[A]) {
       s.configure(properties.asJava, isKey)
       s
     }
-  //Idea:  Extract the KafkaAvroSerializer / Deserializer out of these and have them passed in so we don't expose the schema reg / prop each time.
-  // (Boolean => KAS / KAD) => Serializer[F,A].
+
   def using[F[_]: Sync](
     schemaRegistryClient: SchemaRegistryClient,
     properties: Map[String, String]
