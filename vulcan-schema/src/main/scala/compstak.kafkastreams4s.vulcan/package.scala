@@ -3,10 +3,10 @@ package compstak.kafkastreams4s
 import org.apache.kafka.streams.kstream.KTable
 import org.apache.kafka.streams.StreamsBuilder
 import cats.effect.Effect
-import compstak.kafkastreams4s.vulcan.schema.{AvroSerDes, VulcanSchemaCodec, VulcanSchemaSerdes}
+import compstak.kafkastreams4s.vulcan.schema.{AvroSerDes, VulcanSchemaKeyCodec, VulcanSchemaSerdes}
 
 package object vulcan {
-  type VulcanTable[K, V] = STable[VulcanSchemaCodec, K, V]
+  type VulcanTable[K, V] = STable[VulcanSchemaKeyCodec, K, V]
 
   object VulcanTable {
 
